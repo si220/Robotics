@@ -4,6 +4,7 @@ import random
 import math
 import numpy as np
 BP = brickpi3.BrickPi3()
+from canvas import *
 
 # initialize particle count
 num_particles = 100
@@ -12,7 +13,7 @@ num_particles = 100
 particles = [(0, 0, 0) for i in range(num_particles)]
 
 # initialize weight for each particle
-weight = 1 / num_particles
+weights = [(1 / num_particles) for i in range(num_particles)]
 
 # probabilistic motion
 def drive(x, y, theta, D, alpha, e, f, g):
@@ -70,7 +71,7 @@ def closest_wall(x, y, theta, walls):
     return m_min
 
 
-def calculate_likelihood(x, y, theta, z):
+def calculate_likelihood(x, y, theta, z, m):
     # find out which wall robot will hit and expected depth measurement
     m = closest_wall(x, y, theta, walls)
     # calculate likelihood using a gaussian distribution with a standard deviation of 3
@@ -78,7 +79,8 @@ def calculate_likelihood(x, y, theta, z):
     likelihood = math.exp(-((z - m) ** 2) / (2 * 3 ** 2)) + 0.1
     return likelihood
 
-def update(D, alpha, e, f, g, z):
+
+def update(D, alpha, e, f, g, z, canvas):
     # perform probabilistic motion for each particle
     for i in range(num_particles):
         x, y, theta = particles[i]
@@ -90,12 +92,36 @@ def update(D, alpha, e, f, g, z):
         x, y, theta = particles[i]
         m = closest_wall(x, y, theta, walls)
         w = calculate_likelihood(x, y, theta, z, m)
-        weight[i] *= w
+        weights[i] *= w
+
+    # update particle positions on canvas
+    for i in range(num_particles):
+        x, y, theta = particles[i]
+        canvas.drawParticles([(x, y, theta)])
     
     # normalize weights and resample particles
     # weight = normalize_weights(weight)
     # particles = resample_particles(particles, weight)
 
 
+# restricting speed of motors
+BP.set_motor_limits(BP.PORT_D, 50, 200)
+BP.set_motor_limits(BP.PORT_C, 50, 200)
 
+for i in range(4):
+    # reset encoder position in between each movement
+    BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
+    BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_C))
 
+    # drive 10cm in a straight line
+    BP.set_motor_position(BP.PORT_D, 160)
+    BP.set_motor_position(BP.PORT_C, 160)
+
+    time.sleep(1)
+        
+    # check if motor velocity = 0
+    while BP.get_motor_status(BP.PORT_D)[3] != 0:
+        pass
+
+    # D = 50, alpha = 0, e = 3, f = 5, g = 4, z = 52, 
+    update(10, 0, 3, 5, 4, 52, canvas)
