@@ -96,6 +96,9 @@ class Particles:
         for i in range(self.n):
             w = calculate_likelihood(self.data[i], sensor_reading, map)
             self.weights[i] *= w
+        sum = sum(self.weights)
+        for i in range(self.n):
+            self.weights[i] /= sum 
     
     def draw(self):
         self.canvas.drawParticles(self.data, self.weights);
@@ -203,4 +206,4 @@ def Navigate_and_sample_particles(x, y, current_pos, particles):
     particles.update_spread(current_pos, D, alpha)
 
 def fetch_sensor_readings():
-    
+    pass
