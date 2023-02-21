@@ -31,8 +31,9 @@ print(robot_pos.x, robot_pos.y, robot_pos.theta)
 
 for i in range(1, len(waypoints)):
     particles.draw()
-    mc.Navigate_and_sample_particles(waypoints[i][0], waypoints[i][1], robot_pos, particles)
+    mc.Navigate_and_update_particles(waypoints[i][0], waypoints[i][1], robot_pos, particles)
     reading = mc.fetch_sensor_reading()
     particles.update_weights(mymap, reading)
+    particles.resample()
     robot_pos.update(particles)
     print(robot_pos.x, robot_pos.y, robot_pos.theta)

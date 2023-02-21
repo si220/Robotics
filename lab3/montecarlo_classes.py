@@ -98,8 +98,23 @@ class Particles:
             self.weights[i] *= w
         sum = sum(self.weights)
         for i in range(self.n):
-            self.weights[i] /= sum 
+            self.weights[i] /= sum
     
+    def resample(self):
+        cdf = []
+        counter = 0
+        list_copy = self.data
+        for i in range(self.n):
+            counter+=self.weights[i]
+            cdf[i] = counter
+        for k in range(self.n):
+            random_n = random.random()
+            j = 0
+            while random_n > cdf[j]:
+                j+=1
+            self.data[k] = list_copy[j]
+            self.weights[k] = 0.01
+        
     def draw(self):
         self.canvas.drawParticles(self.data, self.weights);
 
@@ -201,7 +216,7 @@ def navigateToWaypoint(x, y, current_pos):
     move_forward(distance)
     return distance, turn_degrees
 
-def Navigate_and_sample_particles(x, y, current_pos, particles):
+def Navigate_and_update_particles(x, y, current_pos, particles):
     D, alpha= navigateToWaypoint(x, y, current_pos)
     particles.update_spread(current_pos, D, alpha)
 
