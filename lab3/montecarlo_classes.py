@@ -1,10 +1,14 @@
 #!/usr/bin/env python 
-
 # Some suitable functions and data structures for drawing a map and particles
-
+import brickpi3
 import time
 import random
 import math
+
+BP = brickpi3.BrickPi3()
+# restricting speed of motors
+BP.set_motor_limits(BP.PORT_D, 50, 200)
+BP.set_motor_limits(BP.PORT_C, 50, 200)
 
 # Functions to generate some dummy particles data:
 def calcX(x, theta, D, alpha, e):
@@ -150,9 +154,53 @@ def calculate_likelihood(pos, sensor_reading, map):
     likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.1
     return likelihood
 
-'''t = 0;
-while True:
-    particles.update();
-    particles.draw();
-    t += 0.05;
-    time.sleep(0.05);'''
+def turn(turn_degrees):
+    #reset encoder position in between each movement
+    BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
+    BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_C))
+
+    degrees_to_encoder_ratio = 200/90
+    encoder_angle = degrees_to_encoder_ratio * turn_degrees
+    # turn angle_a degrees left
+    BP.set_motor_position(BP.PORT_C, encoder_angle)
+    BP.set_motor_position(BP.PORT_D, - encoder_angle) #780 is 360 degree turn on paper above carpet, 749 is 360 turn on wood table, 805 is on carpet
+    time.sleep(0.5)
+    # check if motor velocity = 0
+    while BP.get_motor_status(BP.PORT_D)[3] != 0:
+        pass
+
+def move_forward(distance):
+    # reset encoder position in between each movement
+    BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_C))
+    BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
+
+    distance_to_encoder_ratio = 166/10
+    encoder_pos = distance_to_encoder_ratio * distance *100
+    # drive 10cm in a straight line
+    BP.set_motor_position(BP.PORT_D, encoder_pos)
+    BP.set_motor_position(BP.PORT_C, encoder_pos)
+    time.sleep(0.5)
+    # check if motor velocity = 0
+    while BP.get_motor_status(BP.PORT_D)[3] != 0:
+        pass
+
+def navigateToWaypoint(x, y, current_pos):
+    distance = math.sqrt((current_pos.x-x)**2 + (current_pos.y-y)**2)
+    d_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
+
+    turn_degrees = d_angle - current_pos.theta
+    print("Turning by this amount:", turn_degrees)
+    current_angle = d_angle
+    print("New angle:", current_angle)
+    # Turn to face waypoint
+    turn(turn_degrees)
+    # Move forward to waypoint
+    move_forward(distance)
+    return distance, turn_degrees
+
+def Navigate_and_sample_particles(x, y, current_pos, particles):
+    D, alpha= navigateToWaypoint(x, y, current_pos)
+    particles.update_spread(current_pos, D, alpha)
+
+def fetch_sensor_readings():
+    
