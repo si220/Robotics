@@ -1,4 +1,3 @@
-import time
 import montecarlo_classes as mc
 
 # global canvas we are going to draw on
@@ -19,7 +18,7 @@ mymap.draw()
 # initialize particle count
 num_particles = 100
 
-waypoints = [(84, 30), (104,30),(124,30),(150,30), (180, 30), (180, 54), (138, 54), (138, 168), (114, 168), (114, 84), (84, 84), (84, 30)]
+waypoints = [(84, 30), (180, 30), (180, 54), (138, 54), (138, 168), (114, 168), (114, 84), (84, 84), (84, 30)]
 
 initial_robot_position = (waypoints[0][0], waypoints[0][1], 0)
 # initialize x, y, and theta for each particle
@@ -29,14 +28,9 @@ print(robot_pos.x, robot_pos.y, robot_pos.theta)
 
 for i in range(1, len(waypoints)):
     particles.draw()
-    time.sleep(1)
     mc.Navigate_and_update_particles(waypoints[i][0], waypoints[i][1], robot_pos, particles)
     reading = mc.fetch_sensor_readings()
     particles.update_weights(mymap, reading)
-    print("Parents",particles.data)
-    print("Weights:",particles.weights)
     particles.resample()
-    print("Babies:",particles.data)
-    print("Weights:",particles.weights)
     robot_pos.update(particles)
     print(f"Current x: {robot_pos.x}, Current y: {robot_pos.y}, Current theta: {robot_pos.theta}")

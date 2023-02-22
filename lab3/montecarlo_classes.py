@@ -6,19 +6,25 @@ import random
 import math
 
 BP = brickpi3.BrickPi3()
-# BP.SENSOR_TYPE.NXT_ULTRASONIC specifies that the sensor will be an NXT ultrasonic sensor.
-BP.set_sensor_type(BP.PORT_2, BP.SENSOR_TYPE.NXT_ULTRASONIC)
 # restricting speed of motors
 BP.set_motor_limits(BP.PORT_D, 50, 200)
 BP.set_motor_limits(BP.PORT_C, 50, 200)
 
+BP.set_sensor_type(BP.PORT_2, BP.SENSOR_TYPE.NXT_ULTRASONIC)
+
 # Functions to generate some dummy particles data:
-def calcX(x, theta, D, alpha, e):    
-    x = x + (D + e) * math.cos(math.radians(theta))
+def calcX(x, theta, D, alpha, e):
+    if alpha==0:
+        x = x + (D + e) * math.cos(math.radians(theta))
+    else:
+        x = x
     return x
 
 def calcY(y, theta, D, alpha, e):
-    y = y + (D + e) * math.sin(math.radians(theta))
+    if alpha==0:
+        y = y + (D + e) * math.sin(math.radians(theta))
+    else:
+        y = y
     return y
 
 def calcTheta(theta, alpha, f, g):
@@ -29,8 +35,8 @@ def calcTheta(theta, alpha, f, g):
     return theta
 
 # A Canvas class for drawing a map and particles:
-#     - it takes care of a proper scaling and coordinate transformation between
-#      the map frame of reference (in cm) and the display (in pixels)
+# 	- it takes care of a proper scaling and coordinate transformation between
+#	  the map frame of reference (in cm) and the display (in pixels)
 class Canvas:
     def __init__(self,map_size=210):
         self.map_size    = map_size;    # in cm;
@@ -74,16 +80,16 @@ class Map:
 # Simple Particles set
 class Particles:
     def __init__(self, canvas, n_particles=100, initial_pos=(0, 0, 0)):
-        self.n = n_particles
+        self.n = n_particles;
         self.canvas = canvas
         self.data = [initial_pos for i in range(self.n)]
         self.weights = [1/self.n for i in range(self.n)]
 
     def update_spread(self, robot_pos, D, alpha):
         for i in range(self.n):
-            e = random.gauss(0, 10)
-            f = random.gauss(0, 10)
-            g = random.gauss(0, 10)
+            e = random.gauss(0, 1)
+            f = random.gauss(0, 1)
+            g = random.gauss(0, 1)
             self.data[i] = (calcX(robot_pos.x, robot_pos.theta, D, alpha, e),
                             calcY(robot_pos.y, robot_pos.theta, D, alpha, e),
                             calcTheta(robot_pos.theta, alpha, f, g))
@@ -91,32 +97,28 @@ class Particles:
     def update_weights(self, map, sensor_reading):
         for i in range(self.n):
             w = calculate_likelihood(self.data[i], sensor_reading, map)
-            print(w)
-            print("Sensor reading: ", sensor_reading)
             self.weights[i] *= w
-        s = sum(self.weights)
+        summation = sum(self.weights)
         for i in range(self.n):
-            self.weights[i] /= s
+            self.weights[i] /= summation
     
     def resample(self):
-        new_data = []
-        cdf = [0]*self.n
+        cdf = []
         counter = 0
+        list_copy = self.data.copy()
         for i in range(self.n):
-            counter += self.weights[i]
-            cdf[i] = counter
+            counter+=self.weights[i]
+            cdf.append(counter)
         for k in range(self.n):
             random_n = random.random()
             j = 0
             while random_n > cdf[j]:
-                j += 1
-            new_data.append(self.data[j])
-        self.data = new_data
-        self.weights = [1/self.n for i in range(self.n)]
+                j+=1
+            self.data[k] = list_copy[j]
+            self.weights[k] = 0.01
         
     def draw(self):
-        self.canvas.drawParticles(self.data, self.weights)
-
+        self.canvas.drawParticles(self.data, self.weights);
 
 class Robot_position:
     def __init__(self, initial_pos=(0, 0, 0)):
@@ -142,15 +144,15 @@ def closest_wall_distance(pos, map):
         x2, y2 = wall[2], wall[3]
 
         # Calculate m
-        m = ((y2 - y1) * (x1 - x) - (x2 - x1) * (y1 - y)) / ((y2 - y1) * math.cos(math.radians(theta)) - (x2 - x1) * math.sin(math.radians(theta)))
+        m = ((y2 - y1) * (x1 - x) - (x2 - x1) * (y1 - y)) / ((y2 - y1) * math.cos(theta) - (x2 - x1) * math.sin(theta))
 
         # If the line segment is behind the robot, skip it
         if m < 0:
             continue
 
         # Calculate the intersection point of the line segment and the line of sight of the robot
-        xi = x + m * math.cos(math.radians(theta))
-        yi = y + m * math.sin(math.radians(theta))
+        xi = x + m * math.cos(theta)
+        yi = y + m * math.sin(theta)
 
         # If the intersection point is not on the line segment, skip it
         if xi < min(x1, x2) or xi > max(x1, x2) or yi < min(y1, y2) or yi > max(y1, y2):
@@ -167,11 +169,9 @@ def closest_wall_distance(pos, map):
 def calculate_likelihood(pos, sensor_reading, map):
     # find out which wall robot will hit and expected depth measurement
     m = closest_wall_distance(pos, map)
-    print("Closest wall distance", m)
     # calculate likelihood using a gaussian distribution with a standard deviation of 3
     # add a constant of 0.1 for robustness
-    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.01
-    print("likelihood", likelihood)
+    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.1
     return likelihood
 
 def turn(turn_degrees):
@@ -179,7 +179,7 @@ def turn(turn_degrees):
     BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
     BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_C))
 
-    degrees_to_encoder_ratio = 210/90
+    degrees_to_encoder_ratio = 200/90
     encoder_angle = degrees_to_encoder_ratio * turn_degrees
     # turn angle_a degrees left
     BP.set_motor_position(BP.PORT_C, encoder_angle)
@@ -195,7 +195,7 @@ def move_forward(distance):
     BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
 
     distance_to_encoder_ratio = 166/10
-    encoder_pos = distance_to_encoder_ratio * distance 
+    encoder_pos = distance_to_encoder_ratio * distance
     # drive 10cm in a straight line
     BP.set_motor_position(BP.PORT_D, encoder_pos)
     BP.set_motor_position(BP.PORT_C, encoder_pos)
@@ -206,10 +206,11 @@ def move_forward(distance):
 
 def navigateToWaypoint(x, y, current_pos, particles):
     distance = math.sqrt((current_pos.x-x)**2 + (current_pos.y-y)**2)
-    target_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
-    turn_degrees = (target_angle - current_pos.theta + 540) % 360 - 180
+    d_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
+
+    turn_degrees = d_angle - current_pos.theta
     print("Turning by this amount:", turn_degrees)
-    current_angle = target_angle
+    current_angle = d_angle
     print("New angle:", current_angle)
     # Turn to face waypoint
     turn(turn_degrees)
@@ -221,15 +222,13 @@ def navigateToWaypoint(x, y, current_pos, particles):
 
 def Navigate_and_update_particles(x, y, current_pos, particles):
     D, alpha= navigateToWaypoint(x, y, current_pos, particles)
+    print(f"Particles before updating: {particles.data}")
     updated_pos = current_pos
     updated_pos.theta +=alpha
     particles.update_spread(updated_pos, D, 0)
+    print(f"Particles after updating: {particles.data}")
 
 def fetch_sensor_readings():
-    time.sleep(0.5)
-    try:
-        value = BP.get_sensor(BP.PORT_2)
-        return value
-    except brickpi3.SensorError as error:
-        print(error)
-        return None
+    time.sleep(1)
+    value = BP.get_sensor(BP.PORT_2)
+    return value
