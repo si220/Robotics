@@ -78,7 +78,7 @@ class Map:
 # Simple Particles set
 class Particles:
     def __init__(self, canvas, n_particles=100, initial_pos=(0, 0, 0)):
-        self.n = n_particles;
+        self.n = n_particles
         self.canvas = canvas
         self.data = [initial_pos for i in range(self.n)]
         self.weights = [1/self.n for i in range(self.n)]
@@ -95,28 +95,31 @@ class Particles:
     def update_weights(self, map, sensor_reading):
         for i in range(self.n):
             w = calculate_likelihood(self.data[i], sensor_reading, map)
+            #print("Sensor reading: ", sensor_reading)
             self.weights[i] *= w
-        sum = sum(self.weights)
+        s = sum(self.weights)
         for i in range(self.n):
-            self.weights[i] /= sum
+            self.weights[i] /= s
     
     def resample(self):
-        cdf = []
+        new_data = []
+        cdf = [0]*self.n
         counter = 0
-        list_copy = self.data
         for i in range(self.n):
-            counter+=self.weights[i]
+            counter += self.weights[i]
             cdf[i] = counter
         for k in range(self.n):
             random_n = random.random()
             j = 0
             while random_n > cdf[j]:
-                j+=1
-            self.data[k] = list_copy[j]
-            self.weights[k] = 0.01
+                j += 1
+            new_data.append(self.data[j])
+        self.data = new_data
+        self.weights = [1/self.n for i in range(self.n)]
         
     def draw(self):
-        self.canvas.drawParticles(self.data, self.weights);
+        self.canvas.drawParticles(self.data, self.weights)
+
 
 class Robot_position:
     def __init__(self, initial_pos=(0, 0, 0)):
@@ -220,5 +223,11 @@ def Navigate_and_update_particles(x, y, current_pos, particles):
     D, alpha= navigateToWaypoint(x, y, current_pos)
     particles.update_spread(current_pos, D, alpha)
 
-def fetch_sensor_readings():
-    pass
+def fetch_sensor_reading():
+    time.sleep(0.1)
+    try:
+        value = BP.get_sensor(BP.PORT_2)
+        return value
+    except brickpi3.SensorError as error:
+        print(error)
+        return None
