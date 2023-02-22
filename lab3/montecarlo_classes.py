@@ -1,4 +1,3 @@
-#!/usr/bin/env python 
 # Some suitable functions and data structures for drawing a map and particles
 import brickpi3
 import time
@@ -11,22 +10,6 @@ BP.set_sensor_type(BP.PORT_2, BP.SENSOR_TYPE.NXT_ULTRASONIC)
 # restricting speed of motors
 BP.set_motor_limits(BP.PORT_D, 50, 200)
 BP.set_motor_limits(BP.PORT_C, 50, 200)
-
-# Functions to generate some dummy particles data:
-def calcX(x, theta, D, alpha, e):    
-    x = x + (D + e) * math.cos(math.radians(theta))
-    return x
-
-def calcY(y, theta, D, alpha, e):
-    y = y + (D + e) * math.sin(math.radians(theta))
-    return y
-
-def calcTheta(theta, alpha, f, g):
-    if alpha==0:
-        theta = theta + f
-    else: 
-        theta = theta + alpha + g
-    return theta
 
 # A Canvas class for drawing a map and particles:
 #     - it takes care of a proper scaling and coordinate transformation between
@@ -71,69 +54,25 @@ class Map:
         for wall in self.walls:
             self.canvas.drawLine(wall);
 
-# Simple Particles set
-class Particles:
-    def __init__(self, canvas, n_particles=100, initial_pos=(0, 0, 0)):
-        self.n = n_particles
-        self.canvas = canvas
-        self.data = [initial_pos for i in range(self.n)]
-        self.weights = [1/self.n for i in range(self.n)]
+def calcX(x, theta, D, e):
+    x = x + (D + e) * math.cos(math.radians(theta))
+    return x
 
-    def update_spread(self, robot_pos, D, alpha):
-        for i in range(self.n):
-            e = random.gauss(0, 10)
-            f = random.gauss(0, 10)
-            g = random.gauss(0, 10)
-            self.data[i] = (calcX(robot_pos.x, robot_pos.theta, D, alpha, e),
-                            calcY(robot_pos.y, robot_pos.theta, D, alpha, e),
-                            calcTheta(robot_pos.theta, alpha, f, g))
+def calcY(y, theta, D, e):
+    y = y + (D + e) * math.sin(math.radians(theta))
+    return y
 
-    def update_weights(self, map, sensor_reading):
-        for i in range(self.n):
-            w = calculate_likelihood(self.data[i], sensor_reading, map)
-            print(w)
-            print("Sensor reading: ", sensor_reading)
-            self.weights[i] *= w
-        s = sum(self.weights)
-        for i in range(self.n):
-            self.weights[i] /= s
-    
-    def resample(self):
-        new_data = []
-        cdf = [0]*self.n
-        counter = 0
-        for i in range(self.n):
-            counter += self.weights[i]
-            cdf[i] = counter
-        for k in range(self.n):
-            random_n = random.random()
-            j = 0
-            while random_n > cdf[j]:
-                j += 1
-            new_data.append(self.data[j])
-        self.data = new_data
-        self.weights = [1/self.n for i in range(self.n)]
-        
-    def draw(self):
-        self.canvas.drawParticles(self.data, self.weights)
+def calcTheta(theta, turn_degrees,f,g):
+    if abs(turn_degrees) < 2:
+        theta = theta + f
+    else: 
+        theta = theta + turn_degrees + g
+    return theta
 
-
-class Robot_position:
-    def __init__(self, initial_pos=(0, 0, 0)):
-        self.x = initial_pos[0]
-        self.y = initial_pos[1]
-        self.theta = initial_pos[2]
-
-    def update(self, particles):
-        sum_x=0; sum_y=0; sum_theta=0
-        for i in range(len(particles.data)):
-            sum_x += particles.weights[i]*particles.data[i][0]
-            sum_y += particles.weights[i]*particles.data[i][1]
-            sum_theta += particles.weights[i]*particles.data[i][2]
-        self.x=sum_x; self.y=sum_y; self.theta=sum_theta
-
-def closest_wall_distance(pos, map):
-    x=pos[0]; y=pos[1]; theta=pos[2]
+def closest_wall_distance(particle_pos, map):
+    x = particle_pos[0]
+    y = particle_pos[1]
+    theta = particle_pos[2]
     m_min = float('inf')
 
     for wall in map.walls:
@@ -164,15 +103,80 @@ def closest_wall_distance(pos, map):
 
     return m_min
 
-def calculate_likelihood(pos, sensor_reading, map):
+
+def calculate_Likelihood(particle_pos, sensor_reading, map):
     # find out which wall robot will hit and expected depth measurement
-    m = closest_wall_distance(pos, map)
-    print("Closest wall distance", m)
+    m = closest_wall_distance(particle_pos, map)
     # calculate likelihood using a gaussian distribution with a standard deviation of 3
     # add a constant of 0.1 for robustness
-    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.01
-    print("likelihood", likelihood)
+    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.005
+
     return likelihood
+
+
+# Simple Particles set
+class Particles:
+    def __init__(self, canvas, n_particles=100, initial_pos=(0, 0, 0)):
+        self.n = n_particles
+        self.canvas = canvas
+        self.data = [initial_pos for i in range(self.n)]
+        self.weights = [1/self.n for i in range(self.n)]
+        
+    def draw(self):
+        self.canvas.drawParticles(self.data, self.weights)
+
+    def update_spread(self, distance, turn_degrees):
+        for i in range(self.n):
+            e = random.gauss(0, 10)
+            f = random.gauss(0, 10)
+            g = random.gauss(0, 10)
+            
+            theta = calcTheta(self.data[i][2], turn_degrees, f, g)
+            x = calcX(self.data[i][0], theta, distance, e)
+            y = calcY(self.data[i][1], theta, distance, e)
+            self.data[i] = (x, y, theta)
+
+    def update_and_norm_weights(self, map, sensor_reading):
+        for i in range(self.n):
+            likelihood = calculate_Likelihood(self.data[i], sensor_reading, map)
+            self.weights[i] *= likelihood
+        s = sum(self.weights)
+        for i in range(self.n):
+            self.weights[i] /= s
+
+    def resample(self):
+        new_data = []
+        cdf = [0]*self.n
+        counter = 0
+        for i in range(self.n):
+            counter += self.weights[i]
+            cdf[i] = counter
+        for k in range(self.n):
+            random_n = random.random()
+            j = 0
+            while random_n > cdf[j]:
+                j += 1
+            new_data.append(self.data[j])
+        self.data = new_data
+        self.weights = [1/self.n for i in range(self.n)]
+
+class Robot_position:
+    def __init__(self, initial_pos=(0, 0, 0)):
+        self.x = initial_pos[0]
+        self.y = initial_pos[1]
+        self.theta = initial_pos[2]
+
+    def update(self, particles):
+        sum_x = 0
+        sum_y = 0
+        sum_theta = 0
+        for i in range(len(particles.data)):
+            sum_theta += particles.weights[i]*particles.data[i][2]
+            sum_x += particles.weights[i]*particles.data[i][0]
+            sum_y += particles.weights[i]*particles.data[i][1]
+        self.x = sum_x
+        self.y = sum_y
+        self.theta = sum_theta
 
 def turn(turn_degrees):
     #reset encoder position in between each movement
@@ -205,25 +209,18 @@ def move_forward(distance):
         pass
 
 def navigateToWaypoint(x, y, current_pos, particles):
+    # Current_pos is robot_pos
     distance = math.sqrt((current_pos.x-x)**2 + (current_pos.y-y)**2)
     target_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
     turn_degrees = (target_angle - current_pos.theta + 540) % 360 - 180
-    print("Turning by this amount:", turn_degrees)
-    current_angle = target_angle
-    print("New angle:", current_angle)
     # Turn to face waypoint
     turn(turn_degrees)
-    # Move forward to waypoint
-    particles.update_spread(current_pos, 0, turn_degrees)
-
+    # Move to waypoint
     move_forward(distance)
-    return distance, turn_degrees
+    particles.update_spread(distance, turn_degrees)
 
-def Navigate_and_update_particles(x, y, current_pos, particles):
-    D, alpha= navigateToWaypoint(x, y, current_pos, particles)
-    updated_pos = current_pos
-    updated_pos.theta +=alpha
-    particles.update_spread(updated_pos, D, 0)
+def Navigate_and_update_particles(dest_x, dest_y, robot_pos, particles):
+    navigateToWaypoint(dest_x, dest_y, robot_pos, particles)
 
 def fetch_sensor_readings():
     time.sleep(0.5)
