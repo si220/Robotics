@@ -6,23 +6,19 @@ import random
 import math
 
 BP = brickpi3.BrickPi3()
+# BP.SENSOR_TYPE.NXT_ULTRASONIC specifies that the sensor will be an NXT ultrasonic sensor.
+BP.set_sensor_type(BP.PORT_2, BP.SENSOR_TYPE.NXT_ULTRASONIC)
 # restricting speed of motors
 BP.set_motor_limits(BP.PORT_D, 50, 200)
 BP.set_motor_limits(BP.PORT_C, 50, 200)
 
 # Functions to generate some dummy particles data:
-def calcX(x, theta, D, alpha, e):
-    if alpha==0:
-        x = x + (D + e) * math.cos(math.radians(theta))
-    else:
-        x = x
+def calcX(x, theta, D, alpha, e):    
+    x = x + (D + e) * math.cos(math.radians(theta))
     return x
 
 def calcY(y, theta, D, alpha, e):
-    if alpha==0:
-        y = y + (D + e) * math.sin(math.radians(theta))
-    else:
-        y = y
+    y = y + (D + e) * math.sin(math.radians(theta))
     return y
 
 def calcTheta(theta, alpha, f, g):
@@ -33,8 +29,8 @@ def calcTheta(theta, alpha, f, g):
     return theta
 
 # A Canvas class for drawing a map and particles:
-# 	- it takes care of a proper scaling and coordinate transformation between
-#	  the map frame of reference (in cm) and the display (in pixels)
+#     - it takes care of a proper scaling and coordinate transformation between
+#      the map frame of reference (in cm) and the display (in pixels)
 class Canvas:
     def __init__(self,map_size=210):
         self.map_size    = map_size;    # in cm;
@@ -85,9 +81,9 @@ class Particles:
 
     def update_spread(self, robot_pos, D, alpha):
         for i in range(self.n):
-            e = random.gauss(0, 1)
-            f = random.gauss(0, 1)
-            g = random.gauss(0, 1)
+            e = random.gauss(0, 10)
+            f = random.gauss(0, 10)
+            g = random.gauss(0, 10)
             self.data[i] = (calcX(robot_pos.x, robot_pos.theta, D, alpha, e),
                             calcY(robot_pos.y, robot_pos.theta, D, alpha, e),
                             calcTheta(robot_pos.theta, alpha, f, g))
@@ -95,7 +91,8 @@ class Particles:
     def update_weights(self, map, sensor_reading):
         for i in range(self.n):
             w = calculate_likelihood(self.data[i], sensor_reading, map)
-            #print("Sensor reading: ", sensor_reading)
+            print(w)
+            print("Sensor reading: ", sensor_reading)
             self.weights[i] *= w
         s = sum(self.weights)
         for i in range(self.n):
@@ -145,15 +142,15 @@ def closest_wall_distance(pos, map):
         x2, y2 = wall[2], wall[3]
 
         # Calculate m
-        m = ((y2 - y1) * (x1 - x) - (x2 - x1) * (y1 - y)) / ((y2 - y1) * math.cos(theta) - (x2 - x1) * math.sin(theta))
+        m = ((y2 - y1) * (x1 - x) - (x2 - x1) * (y1 - y)) / ((y2 - y1) * math.cos(math.radians(theta)) - (x2 - x1) * math.sin(math.radians(theta)))
 
         # If the line segment is behind the robot, skip it
         if m < 0:
             continue
 
         # Calculate the intersection point of the line segment and the line of sight of the robot
-        xi = x + m * math.cos(theta)
-        yi = y + m * math.sin(theta)
+        xi = x + m * math.cos(math.radians(theta))
+        yi = y + m * math.sin(math.radians(theta))
 
         # If the intersection point is not on the line segment, skip it
         if xi < min(x1, x2) or xi > max(x1, x2) or yi < min(y1, y2) or yi > max(y1, y2):
@@ -170,9 +167,11 @@ def closest_wall_distance(pos, map):
 def calculate_likelihood(pos, sensor_reading, map):
     # find out which wall robot will hit and expected depth measurement
     m = closest_wall_distance(pos, map)
+    print("Closest wall distance", m)
     # calculate likelihood using a gaussian distribution with a standard deviation of 3
     # add a constant of 0.1 for robustness
-    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.1
+    likelihood = math.exp(-((sensor_reading - m) ** 2) / (2 * 3 ** 2)) + 0.01
+    print("likelihood", likelihood)
     return likelihood
 
 def turn(turn_degrees):
@@ -180,7 +179,7 @@ def turn(turn_degrees):
     BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
     BP.offset_motor_encoder(BP.PORT_C, BP.get_motor_encoder(BP.PORT_C))
 
-    degrees_to_encoder_ratio = 200/90
+    degrees_to_encoder_ratio = 210/90
     encoder_angle = degrees_to_encoder_ratio * turn_degrees
     # turn angle_a degrees left
     BP.set_motor_position(BP.PORT_C, encoder_angle)
@@ -196,7 +195,7 @@ def move_forward(distance):
     BP.offset_motor_encoder(BP.PORT_D, BP.get_motor_encoder(BP.PORT_D))
 
     distance_to_encoder_ratio = 166/10
-    encoder_pos = distance_to_encoder_ratio * distance *100
+    encoder_pos = distance_to_encoder_ratio * distance 
     # drive 10cm in a straight line
     BP.set_motor_position(BP.PORT_D, encoder_pos)
     BP.set_motor_position(BP.PORT_C, encoder_pos)
@@ -205,26 +204,29 @@ def move_forward(distance):
     while BP.get_motor_status(BP.PORT_D)[3] != 0:
         pass
 
-def navigateToWaypoint(x, y, current_pos):
+def navigateToWaypoint(x, y, current_pos, particles):
     distance = math.sqrt((current_pos.x-x)**2 + (current_pos.y-y)**2)
-    d_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
-
-    turn_degrees = d_angle - current_pos.theta
+    target_angle = math.degrees(math.atan2((y-current_pos.y),(x-current_pos.x)))
+    turn_degrees = (target_angle - current_pos.theta + 540) % 360 - 180
     print("Turning by this amount:", turn_degrees)
-    current_angle = d_angle
+    current_angle = target_angle
     print("New angle:", current_angle)
     # Turn to face waypoint
     turn(turn_degrees)
     # Move forward to waypoint
+    particles.update_spread(current_pos, 0, turn_degrees)
+
     move_forward(distance)
     return distance, turn_degrees
 
 def Navigate_and_update_particles(x, y, current_pos, particles):
-    D, alpha= navigateToWaypoint(x, y, current_pos)
-    particles.update_spread(current_pos, D, alpha)
+    D, alpha= navigateToWaypoint(x, y, current_pos, particles)
+    updated_pos = current_pos
+    updated_pos.theta +=alpha
+    particles.update_spread(updated_pos, D, 0)
 
-def fetch_sensor_reading():
-    time.sleep(0.1)
+def fetch_sensor_readings():
+    time.sleep(0.5)
     try:
         value = BP.get_sensor(BP.PORT_2)
         return value
