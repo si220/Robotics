@@ -20,9 +20,10 @@ class LocationSignature:
         
     def print_signature(self):
         for i in range(len(self.sig)):
-            print self.sig[i]
+            print(self.sig[i])
 
 # --------------------- File management class ---------------
+
 class SignatureContainer():
     def __init__(self, size = 5):
         self.size      = size; # max number of signatures that can be stored
@@ -49,13 +50,14 @@ class SignatureContainer():
  
     # Delete all loc_%%.dat files
     def delete_loc_files(self):
-        print "STATUS:  All signature files removed."
+        print("STATUS:  All signature files removed.")
         for n in range(self.size):
             if os.path.isfile(self.filenames[n]):
                 os.remove(self.filenames[n])
             
     # Writes the signature to the file identified by index (e.g, if index is 1
     # it will be file loc_01.dat). If file already exists, it will be replaced.
+
     def save(self, signature, index):
         filename = self.filenames[index]
         if os.path.isfile(filename):
@@ -67,7 +69,7 @@ class SignatureContainer():
             s = str(signature.sig[i]) + "\n"
             f.write(s)
         f.close();
-
+    
     # Read signature file identified by index. If the file doesn't exist
     # it returns an empty signature.
     def read(self, index):
@@ -81,12 +83,11 @@ class SignatureContainer():
                     ls.sig[i] = int(s)
             f.close();
         else:
-            print "WARNING: Signature does not exist."
+            print("WARNING: Signature does not exist.")
         
         return ls
 
 def fetch_sensor_readings():
-    time.sleep(0.5)
     try:
         value = BP.get_sensor(BP.PORT_2)
         return value
@@ -106,7 +107,6 @@ def turn(turn_degrees):
     BP.set_motor_position(BP.PORT_C, encoder_angle)
     BP.set_motor_position(BP.PORT_D, - encoder_angle) #780 is 360 degree turn on paper above carpet, 749 is 360 turn on wood table, 805 is on carpet
     
-    time.sleep(0.5)
 
     # check if motor velocity = 0
     while BP.get_motor_status(BP.PORT_D)[3] != 0:
@@ -118,15 +118,15 @@ def turn(turn_degrees):
 def characterize_location(ls):
     #print "TODO:    You should implement the function that captures a signature."
     for i in range(len(ls.sig)):
-        ls.sig[i] = turn(30)
+        ls.sig[i] = turn(1)
 
 # FILL IN: compare two signatures
 def compare_signatures(ls1, ls2):
     dist = 0
     #print "TODO:    You should implement the function that compares two signatures."
     for i in range(len(ls1.sig)):
-        diff = (ls1[i] - ls2[i])**2
-        dist += diff
+        squared_diff = (ls1[i] - ls2[i])**2
+        dist += squared_diff
     return dist
 
 # This function characterizes the current location, and stores the obtained 
@@ -136,13 +136,13 @@ def learn_location():
     characterize_location(ls)
     idx = signatures.get_free_index();
     if (idx == -1): # run out of signature files
-        print "\nWARNING:"
-        print "No signature file is available. NOTHING NEW will be learned and stored."
-        print "Please remove some loc_%%.dat files.\n"
+        print("\nWARNING:")
+        print("No signature file is available. NOTHING NEW will be learned and stored.")
+        print("Please remove some loc_%%.dat files.\n")
         return
     
     signatures.save(ls,idx)
-    print "STATUS:  Location " + str(idx) + " learned and saved."
+    print("STATUS:  Location " + str(idx) + " learned and saved.")
 
 # This function tries to recognize the current location.
 # 1.   Characterize current location
@@ -156,11 +156,25 @@ def recognize_location():
     ls_obs = LocationSignature();
     characterize_location(ls_obs);
 
+    lowest_dist = float('inf')
+
     # FILL IN: COMPARE ls_read with ls_obs and find the best match
     for idx in range(signatures.size):
-        print "STATUS:  Comparing signature " + str(idx) + " with the observed signature."
+        print("STATUS:  Comparing signature " + str(idx) + " with the observed signature.")
         ls_read = signatures.read(idx);
         dist    = compare_signatures(ls_obs, ls_read)
+
+        if dist < lowest_dist:
+            lowest_dist = dist
+            best_sig = ls_read
+            best_idx = idx
+        
+        #best_sig is the array / histogram of the closest signature a
+        #best_idx is the index of the closest sig.
+
+        print(f'best index = {best_idx}')
+
+        return best_sig
 
 # Prior to starting learning the locations, it should delete files from previous
 # learning either manually or by calling signatures.delete_loc_files(). 
