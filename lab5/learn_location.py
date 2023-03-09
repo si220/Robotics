@@ -86,6 +86,7 @@ class SignatureContainer():
             print("WARNING: Signature does not exist.")
         
         return ls
+#______________________________________________________________________________________________________________ 4.1
 
 def fetch_sensor_readings():
     try:
@@ -113,7 +114,13 @@ def turn(turn_degrees):
         pass
 
     fetch_sensor_readings()
-        
+
+#______________________________________________________________________________________________________________ 4.1
+
+#--------------------------------------------------------------------------------------------------------------
+
+#______________________________________________________________________________________________________________ 4.2
+       
 # FILL IN: spin robot or sonar to capture a signature and store it in ls
 def characterize_location(ls):
     #print "TODO:    You should implement the function that captures a signature."
@@ -152,29 +159,36 @@ def learn_location():
 # 3.   Retain the learned location whose minimum distance with
 #      actual characterization is the smallest.
 # 4.   Display the index of the recognized location on the screen
+
 def recognize_location():
-    ls_obs = LocationSignature();
+    ls_obs = LocationSignature(); #ls_obs where we are right now
     characterize_location(ls_obs);
 
     lowest_dist = float('inf')
 
-    # FILL IN: COMPARE ls_read with ls_obs and find the best match
-    for idx in range(signatures.size):
-        print("STATUS:  Comparing signature " + str(idx) + " with the observed signature.")
-        ls_read = signatures.read(idx);
-        dist    = compare_signatures(ls_obs, ls_read)
-
-        if dist < lowest_dist:
-            lowest_dist = dist
-            best_sig = ls_read
-            best_idx = idx
+    for i in range(0, 359):
+        ls_obs = ls_obs[-i:] + ls_obs[:-i]
         
-        #best_sig is the array / histogram of the closest signature a
-        #best_idx is the index of the closest sig.
+    # FILL IN: COMPARE ls_read with ls_obs and find the best match
+        for idx in range(signatures.size):
+            print("STATUS:  Comparing signature " + str(idx) + " with the observed signature.")
+            ls_read = signatures.read(idx)
 
-        print(f'best index = {best_idx}')
+            dist    = compare_signatures(ls_obs, ls_read)
+            
+            if dist < lowest_dist:
+                lowest_dist = dist
+                best_sig = ls_read
+                best_idx = idx
+            #________________________________________________________________________
+            # so to terminate the for loop as we are looping if we dont find a better 
+            #_________________________________________________________________________
+            #best_sig is the array / histogram of the closest signature a
+            #best_idx is the index of the closest sig.
 
-        return best_sig
+            print(f'best index = {best_idx}')
+
+            return best_sig
 
 # Prior to starting learning the locations, it should delete files from previous
 # learning either manually or by calling signatures.delete_loc_files(). 
@@ -186,4 +200,9 @@ signatures = SignatureContainer(5);
 
 learn_location();
 recognize_location();
+
+#______________________________________________________________________________________________________________ 4.2
+
+# they he explained it loop the recieved sig by 1 degree and compare with 5 current sigs then use if statements to see if it matches closely
+# the 5 sigs are saved in ls
 
